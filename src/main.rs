@@ -1,13 +1,17 @@
 use crate::display::TerminalApp;
 use clap::{App, Arg};
-use std::error::Error;
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+    thread,
+};
 use wl_split_timer::WlSplitTimer;
 
 mod display;
 mod file;
 mod wl_split_timer;
 
-pub trait TimerDisplay {
+pub trait TimerDisplay: Send + Sync {
     fn run(&self) -> Result<(), Box<dyn Error>>;
 
     fn split(&mut self);
@@ -46,9 +50,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let display = matches.value_of("display").unwrap();
-    let mut app = get_app(display, timer);
-    app.run()?;
+    let app = get_app(display, timer);
 
+    let app2 = Arc::new(Mutex::new(app));
+
+    let cloned = Arc::clone(&app2);
+
+    thread::spawn(move || {
+        cloned.lock().unwrap().run();
+    });
+
+    app2.lock().unwrap().start();
+
+    loop {}
     Ok(())
 }
 
